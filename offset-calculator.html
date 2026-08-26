@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Advanced Offset Interest Calculator</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 1000px; margin: 40px auto; padding: 20px; background:#f9f9f9; }
+  label { display:block; margin-top:15px; font-weight:bold; }
+  input { width:100%; padding:8px; margin-top:5px; }
+  button { margin-top:5px; padding:5px 10px; }
+  .results { margin-top:20px; padding:15px; background:#fff; border:1px solid #ddd; }
+  table { width:100%; border-collapse:collapse; margin-top:20px; background:#fff; }
+  th, td { border:1px solid #ddd; padding:8px; text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  th { background:#f1f1f1; }
+  .item-row { display:flex; gap:5px; margin-top:5px; }
+  .item-row input { width: calc(50% - 5px); }
+</style>
+</head>
+<body>
+
+<h1>Advanced Offset Interest Calculator</h1>
+
+<label>Loan Balance ($)<input id="loanBalance" type="number"></label>
+<label>Monthly Loan Repayment ($)<input id="monthlyRepayment" type="number"></label>
+<label>Annual Interest Rate (%)<input id="annualInterestRate" step="0.01" type="number"></label>
+<label>Period (years)<input id="years" step="0.1" type="number"></label>
+
+<hr>
+
+<h3>Initial Offset Balance</h3>
+<label>Starting Offset Balance ($)<input id="startingOffset" type="number"></label>
+
+<hr>
+
+<h3>Monthly Contributions (amount changes at start date)</h3>
+<div id="contributionsContainer"></div>
+<button id="addContributionBtn">Add Monthly Contribution</button>
+
+<hr>
+
+<h3>Lump Sums</h3>
+<div id="lumpsContainer"></div>
+<button id="addLumpBtn">Add Lump Sum</button>
+
+<hr>
+
+<h3>Expenses (Offset Reductions)</h3>
+<div id="expensesContainer"></div>
+<button id="addExpenseBtn">Add Expense</button>
+
+<div class="results" id="results"></div>
+<div id="monthlyTable"></div>
+
+<script>
+const STORAGE_KEY = 'advancedOffsetCalcState';
+let contributions = [];
+let lumps = [];
+let expenses = [];
+
+/* ------------------ DOM refs ------------------ */
+const loanBalanceInput = document.getElementById('loanBalance');
+const monthlyRepaymentInput = document.getElementById('monthlyRepayment');
+const annualInterestRateInput = document.getElementById('annualInterestRate');
+const yearsInput = document.getElementById('years');
+const startingOffsetInput = document.getElementById('startingOffset');
+
+const contributionsContainer = document.getElementById('contributionsContainer');
+const addContributionBtn = document.getElementById('addContributionBtn');
+
+const lumpsContainer = document.getElementById('lumpsContainer');
+const addLumpBtn = document.getElementById('addLumpBtn');
+
+const expensesContainer = document.getElementById('expensesContainer');
+const addExpenseBtn = document.getElementById('addExpenseBtn');
+
+const results = document.getElementById('results');
+const monthlyTable = document.getElementById('monthlyTable');
+
+/* ------------------ Local Storage ------------------ */
+const inputs = [loanBalanceInput, monthlyRepaymentInput, annualInterestRateInput, yearsInput, startingOffsetInput];
+inputs.forEach(i => i.addEventListener('input', onInput));
+addContributionBtn.addEventListener('click', () => addContribution());
+addLumpBtn.addEventListener('click', () => addLump());
+addExpenseBtn.addEventListener('click', () => addExpense());
+
+function onInput() { saveState(); calculate(); }
+
+function saveState() {
+  const state = {};
+  inputs.forEach(i => state[i.id] = i.value);
+  state.contributions = contributions;
+  state.lumps = lumps;
+  state.expenses = expenses;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function loadState() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) return;
+  const state = JSON.parse(saved);
+  inputs.forEach(i => { if (state[i.id] !== undefined) i.value = state[i.id]; });
+  if (state.contributions) { contributions = state.contributions; renderContributions(); }
+  if (state.lumps) { lumps = state.lumps; renderLumps(); }
+  if (state.expenses) { expenses = state.expenses; renderExpenses(); }
+}
+
+/* ------------------ Contributions ------------------ */
+function addContribution(amount='', startDate='') {
+  contributions.push({amount,startDate});
+  renderContributions();
+  saveState();
+  calculate();
+}
+function removeContribution(index){ contributions.splice(index,1); renderContributions(); saveState(); calculate(); }
+function updateContribution(index,key,value){ contributions[index][key]=value; saveState(); calculate(); }
+function renderContributions(){
+  contributionsContainer.innerHTML = '';
+  contributions.forEach((c,i)=>{
+    const div = document.createElement('div');
+    div.className='item-row';
+    div.innerHTML=`
+      <input type="number" placeholder="Amount ($)" value="${c.amount}" />
+      <input type="date" value="${c.startDate}" />
+      <button type="button">Remove</button>
+    `;
+    div.querySelectorAll('input')[0].addEventListener('input',e=>updateContribution(i,'amount',e.target.value));
+    div.querySelectorAll('input')[1].addEventListener('input',e=>updateContribution(i,'startDate',e.target.value));
+    div.querySelector('button').addEventListener('click',()=>removeContribution(i));
+    contributionsContainer.appendChild(div);
+  });
+}
+
+/* ------------------ Lump sums ------------------ */
+function addLump(amount='', date='') {
+  lumps.push({amount,date});
+  renderLumps();
+  saveState();
+  calculate();
+}
+function removeLump(index){ lumps.splice(index,1); renderLumps(); saveState(); calculate(); }
+function updateLump(index,key,value){ lumps[index][key]=value; saveState(); calculate(); }
+function renderLumps(){
+  lumpsContainer.innerHTML='';
+  lumps.forEach((l,i)=>{
+    const div=document.createElement('div');
+    div.className='item-row';
+    div.innerHTML=`
+      <input type="number" placeholder="Amount ($)" value="${l.amount}" />
+      <input type="date" value="${l.date}" />
+      <button type="button">Remove</button>
+    `;
+    div.querySelectorAll('input')[0].addEventListener('input',e=>updateLump(i,'amount',e.target.value));
+    div.querySelectorAll('input')[1].addEventListener('input',e=>updateLump(i,'date',e.target.value));
+    div.querySelector('button').addEventListener('click',()=>removeLump(i));
+    lumpsContainer.appendChild(div);
+  });
+}
+
+/* ------------------ Expenses ------------------ */
+function addExpense(amount='', date='') {
+  expenses.push({ amount, date });
+  renderExpenses();
+  saveState();
+  calculate();
+}
+function removeExpense(index){ expenses.splice(index,1); renderExpenses(); saveState(); calculate(); }
+function updateExpense(index,key,value){ expenses[index][key]=value; saveState(); calculate(); }
+function renderExpenses(){
+  expensesContainer.innerHTML='';
+  expenses.forEach((e,i)=>{
+    const div=document.createElement('div');
+    div.className='item-row';
+    div.innerHTML=`
+      <input type="number" placeholder="Amount ($)" value="${e.amount}" />
+      <input type="date" value="${e.date}" />
+      <button type="button">Remove</button>
+    `;
+    div.querySelectorAll('input')[0].addEventListener('input',x=>updateExpense(i,'amount',x.target.value));
+    div.querySelectorAll('input')[1].addEventListener('input',x=>updateExpense(i,'date',x.target.value));
+    div.querySelector('button').addEventListener('click',()=>removeExpense(i));
+    expensesContainer.appendChild(div);
+  });
+}
+
+/* ------------------ Calculator ------------------ */
+function calculate() {
+  let loanBalance = Number(loanBalanceInput.value) || 0;
+  const monthlyRepayment = Number(monthlyRepaymentInput.value) || 0;
+  const annualRate = Number(annualInterestRateInput.value) || 0;
+  const years = Number(yearsInput.value) || 0;
+  let offsetBalance = Number(startingOffsetInput.value) || 0;
+
+  if(loanBalance<=0||years<=0){ results.innerHTML=''; monthlyTable.innerHTML=''; return; }
+
+  const totalMonths = Math.round(years*12);
+  const dailyRate = annualRate/100/365;
+  const daysPerMonth = Math.round(365/12);
+
+  // Map lump sums and expenses to months
+  const lumpsMonths = lumps.map(l=>{
+    if(!l.amount||!l.date) return null;
+    const start=new Date(); start.setHours(0,0,0,0);
+    const d=new Date(l.date); d.setHours(0,0,0,0);
+    return {month:Math.max(1,Math.ceil((d-start)/(1000*60*60*24*30.4))), amount:Number(l.amount)};
+  }).filter(x=>x!==null);
+
+  const expenseMonths = expenses.map(e=>{
+    if(!e.amount||!e.date) return null;
+    const start=new Date(); start.setHours(0,0,0,0);
+    const d=new Date(e.date); d.setHours(0,0,0,0);
+    return {month:Math.max(1,Math.ceil((d-start)/(1000*60*60*24*30.4))), amount:Number(e.amount)};
+  }).filter(x=>x!==null);
+
+  // Map contributions to months
+  const contributionsMonths = contributions.map(c=>{
+    if(!c.amount||!c.startDate) return null;
+    const start=new Date(); start.setHours(0,0,0,0);
+    const d=new Date(c.startDate); d.setHours(0,0,0,0);
+    return {month:Math.max(1,Math.ceil((d-start)/(1000*60*60*24*30.4))), amount:Number(c.amount)};
+  }).filter(x=>x!==null);
+
+  // Sort contributions by month ascending
+  contributionsMonths.sort((a,b)=>a.month-b.month);
+
+  let totalInterestPaid=0;
+  let totalInterestWithoutOffset=0;
+  let cumulativeInterestSaved=0;
+
+  const rows=[];
+
+  for(let month=1; month<=totalMonths && loanBalance>0; month++){
+    const openingLoan = loanBalance;
+    let interestWithOffset=0;
+    for(let d=0; d<daysPerMonth; d++){
+      const effectiveLoan=Math.max(loanBalance-offsetBalance,0);
+      interestWithOffset+=effectiveLoan*dailyRate;
+    }
+
+    let interestWithoutOffset=0;
+    for(let d=0; d<daysPerMonth; d++){ interestWithoutOffset+=loanBalance*dailyRate; }
+
+    // Apply lumps
+    lumpsMonths.forEach(l=>{ if(l.month===month) offsetBalance+=l.amount; });
+    // Apply expenses
+    expenseMonths.forEach(e=>{ if(e.month===month) offsetBalance=Math.max(offsetBalance-e.amount,0); });
+
+    // Determine current monthly contribution (most recent before this month)
+    let currentContribution = 0;
+    contributionsMonths.forEach(c => { if(c.month <= month) currentContribution = c.amount; });
+    offsetBalance += currentContribution;
+
+    const principalReduction = Math.max(monthlyRepayment-interestWithOffset,0);
+    loanBalance=Math.max(loanBalance-principalReduction,0);
+
+    totalInterestPaid+=interestWithOffset;
+    totalInterestWithoutOffset+=interestWithoutOffset;
+    cumulativeInterestSaved+=(interestWithoutOffset-interestWithOffset);
+
+    rows.push({
+      month,
+      openingLoan,
+      interestPaid:interestWithOffset,
+      principalReduction,
+      closingLoan:loanBalance,
+      offsetBalance,
+      cumulativeInterestSaved
+    });
+  }
+
+  const totalInterestSaved = totalInterestWithoutOffset - totalInterestPaid;
+
+  results.innerHTML=`
+    <strong>Total Interest Paid:</strong> $${totalInterestPaid.toFixed(2)}<br>
+    <strong>Total Interest Saved:</strong> $${totalInterestSaved.toFixed(2)}<br>
+    <strong>Remaining Loan Balance:</strong> $${loanBalance.toFixed(2)}<br>
+    <strong>Final Offset Balance:</strong> $${offsetBalance.toFixed(2)}
+  `;
+
+  renderTable(rows);
+}
+
+function renderTable(rows){
+  let html=`
+    <table>
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th>Opening Loan ($)</th>
+          <th>Interest Paid ($)</th>
+          <th>Principal Reduction ($)</th>
+          <th>Closing Loan ($)</th>
+          <th>Offset Balance ($)</th>
+          <th>Cumulative Interest Saved ($)</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  rows.forEach(r=>{
+    html+=`
+      <tr>
+        <td>${r.month}</td>
+        <td>${r.openingLoan.toFixed(2)}</td>
+        <td>${r.interestPaid.toFixed(2)}</td>
+        <td>${r.principalReduction.toFixed(2)}</td>
+        <td>${r.closingLoan.toFixed(2)}</td>
+        <td>${r.offsetBalance.toFixed(2)}</td>
+        <td>${r.cumulativeInterestSaved.toFixed(2)}</td>
+      </tr>
+    `;
+  });
+  html+='</tbody></table>';
+  monthlyTable.innerHTML=html;
+}
+
+/* ------------------ Init ------------------ */
+loadState();
+calculate();
+</script>
+
+</body>
+</html>
