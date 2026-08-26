@@ -18,11 +18,40 @@ npm run dev
 | --- | --- |
 | `npm run dev` | Vite dev server with hot reload |
 | `npm run build` | Type-check, then build to `dist/` |
+| `npm run build:static` | Build one self-contained HTML file to `dist-static/` |
 | `npm run preview` | Serve the production build locally |
 | `npm run typecheck` | Type-check only |
 | `npm run sync` | Build, then copy the web build into the native projects |
 | `npm run ios` | Sync and open the iOS project in Xcode |
 | `npm run android` | Sync and open the Android project in Android Studio |
+
+## Opening it without a server
+
+```bash
+npm run build:static
+```
+
+That writes a single **`dist-static/offset-calculator.html`** (~240 KB) that you
+can double-click, email, or drop on a USB stick. No server, no sibling files,
+no network requests at all — the JS, the CSS and the favicon are all inlined.
+
+The ordinary `npm run build` output cannot be opened this way. A `file://` page
+has an opaque origin, so the browser refuses to fetch its own sibling files, and
+the `<script type="module">` a normal Vite build emits is blocked outright. The
+static build therefore differs in three ways, all in `vite.config.ts`:
+
+- everything is inlined, so there is nothing to fetch;
+- the bundle is emitted as a classic `iife` script rather than an ES module;
+- that script is injected at the end of `<body>`, not in `<head>` — a module
+  script is deferred until the document is parsed, but a classic one is not, so
+  in `<head>` it would run before `#root` exists and React would fail to mount.
+
+The build asserts all three before writing the file, so a regression fails the
+build rather than producing an HTML file that silently breaks on disk.
+
+One caveat: some browsers restrict `localStorage` for pages loaded from disk. If
+yours does, the calculator still works normally but will not remember your
+inputs between sessions — export a profile to keep it.
 
 ## Packaging as a native app
 

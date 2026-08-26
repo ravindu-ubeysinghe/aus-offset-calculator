@@ -3,10 +3,11 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Mortgage offset interest calculator — web, iOS and Android.",
+  "description": "Mortgage offset interest calculator \u2014 web, iOS and Android.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:static": "tsc -b && STATIC=1 vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "sync": "npm run build && cap sync",
