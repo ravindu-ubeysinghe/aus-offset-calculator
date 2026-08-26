@@ -3,6 +3,7 @@
 .DS_Store
 android
 dist
+dist-static
 ios
 node_modules
 tsconfig.tsbuildinfo
